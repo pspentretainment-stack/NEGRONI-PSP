@@ -14,13 +14,10 @@ import {
   ArrowUpRight,
   CalendarDays,
   Users,
-  Wallet,
   Activity,
   Settings,
-  LogOut,
   Command
 } from "lucide-react";
-
 type ModuleId = "dashboard" | "passali" | "artists" | "business" | "management";
 
 const navigation = [
