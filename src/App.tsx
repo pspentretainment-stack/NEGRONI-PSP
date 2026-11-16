@@ -387,8 +387,32 @@ function Dashboard({ user, role, modules, onLogout }: DashboardProps) {
                 </div>
               </section>
             </>
-          ) : (
-            <section className="module-placeholder">
+         ) : activeModule === "passali" ? (
+  <section
+    style={{
+      width: "100%",
+      minHeight: "750px",
+      height: "calc(100vh - 160px)",
+      borderRadius: "14px",
+      overflow: "hidden",
+      background: "#09080d",
+      border: "1px solid #292431"
+    }}
+  >
+    <iframe
+      src="https://pspentertainment-stack.github.io/PASSALI-ADMIN/"
+      title="Passali Tickets — Administração"
+      style={{
+        width: "100%",
+        height: "100%",
+        border: "none",
+        display: "block"
+      }}
+      allow="clipboard-read; clipboard-write"
+    />
+  </section>
+) : (
+  <section className="module-placeholder">
               <div className="placeholder-icon">
                 {activeModule === "passali" && <Ticket size={32} />}
                 {activeModule === "artists" && <Mic2 size={32} />}
