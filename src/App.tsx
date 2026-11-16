@@ -36,7 +36,12 @@ interface DashboardProps {
   modules: ModuleKey[];
   onLogout: () => void;
 }
-type ModuleId = "dashboard" | "passali" | "artists" | "business" | "management";
+type ModuleId =
+  | "dashboard"
+  | "passali"
+  | "artists"
+  | "business"
+  | "management";
 
 const navigation = [
   { id: "dashboard" as ModuleId, label: "Dashboard", icon: LayoutDashboard },
@@ -387,7 +392,7 @@ function Dashboard({ user, role, modules, onLogout }: DashboardProps) {
                 </div>
               </section>
             </>
-         ) : activeModule === "passali" ? (
+        ) : (activeModule as ModuleId) === "passali" ? (
   <section
     style={{
       width: "100%",
