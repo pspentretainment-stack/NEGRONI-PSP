@@ -96,7 +96,7 @@ export default function Login({ onLogin }: LoginProps) {
         role === "super_admin"
           ? allModules
           : (accessData || []).map(
-              item => item.module_key as ModuleKey
+            (item: { module_key: string }) => item.module_key as ModuleKey
             );
 
       onLogin(data.user, role, modules);
