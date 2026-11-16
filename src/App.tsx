@@ -1,5 +1,7 @@
-
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { User } from "@supabase/supabase-js";
+import Login from "./Login";
+import { supabase } from "./supabase";
 import {
   LayoutDashboard,
   Ticket,
@@ -15,9 +17,24 @@ import {
   CalendarDays,
   Users,
   Activity,
-  Settings,
+  LogOut,
   Command
 } from "lucide-react";
+type Role =
+  | "super_admin"
+  | "admin"
+  | "manager"
+  | "artist"
+  | "collaborator";
+
+type ModuleKey = "passali" | "artists" | "business" | "management";
+
+interface DashboardProps {
+  user: User;
+  role: Role;
+  modules: ModuleKey[];
+  onLogout: () => void;
+}
 type ModuleId = "dashboard" | "passali" | "artists" | "business" | "management";
 
 const navigation = [
@@ -51,9 +68,12 @@ const moduleContent: Record<ModuleId, { title: string; description: string }> = 
   }
 };
 
-function App() {
+function Dashboard({ user, role, modules, onLogout }: DashboardProps) {
   const [activeModule, setActiveModule] = useState<ModuleId>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const visibleNavigation = navigation.filter(
+  item => item.id === "dashboard" || modules.includes(item.id as ModuleKey)
+);
 
   const current = moduleContent[activeModule];
 
@@ -97,7 +117,7 @@ function App() {
         <div className="nav-label">MENU PRINCIPAL</div>
 
         <nav className="main-navigation">
-          {navigation.map((item) => {
+         {visibleNavigation.map((item) => {
             const Icon = item.icon;
             const active = activeModule === item.id;
 
@@ -124,16 +144,17 @@ function App() {
             <span>Sistema operacional</span>
           </div>
 
-          <button className="nav-item secondary-item">
-            <Settings size={18} />
-            <span>Definições</span>
-          </button>
+        <button className="nav-item secondary-item" onClick={onLogout}>
+  <LogOut size={18} />
+  <span>Terminar sessão</span>
+</button>
 
           <div className="sidebar-profile">
             <div className="avatar">PS</div>
             <div className="profile-info">
-              <strong>PSP Administrator</strong>
-              <span>Administrador</span>
+              <strong>{user.email || "Utilizador"}</strong>
+<span>{role.replace("_", " ")}</span><strong>{user.email || "Utilizador"}</strong>
+<span>{role.replace("_", " ")}</span>
             </div>
             <ChevronDown size={15} />
           </div>
@@ -393,5 +414,146 @@ function App() {
   );
 }
 
-export default App;
+
+export default function App() {
+  const [auth, setAuth] = useState<{
+    user: User;
+    role: Role;
+    modules: ModuleKey[];
+  } | null>(null);
+
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function restoreSession() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (!session) {
+          if (mounted) setChecking(false);
+          return;
+        }
+
+        const { data: roleData, error: roleError } = await supabase
+          .from("negroni_user_roles")
+          .select("role, is_active")
+          .eq("user_id", session.user.id)
+          .maybeSingle();
+
+        if (roleError || !roleData || !roleData.is_active) {
+          await supabase.auth.signOut();
+          if (mounted) setChecking(false);
+          return;
+        }
+
+        const validRoles: Role[] = [
+          "super_admin",
+          "admin",
+          "manager",
+          "artist",
+          "collaborator"
+        ];
+
+        if (!validRoles.includes(roleData.role as Role)) {
+          await supabase.auth.signOut();
+          if (mounted) setChecking(false);
+          return;
+        }
+
+        const role = roleData.role as Role;
+
+        const { data: accessData, error: accessError } = await supabase
+          .from("negroni_module_access")
+          .select("module_key")
+          .eq("user_id", session.user.id)
+          .eq("is_active", true);
+
+        if (accessError) {
+          await supabase.auth.signOut();
+          if (mounted) setChecking(false);
+          return;
+        }
+
+        const allModules: ModuleKey[] = [
+          "passali",
+          "artists",
+          "business",
+          "management"
+        ];
+
+        const modules: ModuleKey[] =
+          role === "super_admin"
+            ? allModules
+            : (accessData || []).map(
+                (item: { module_key: string }) =>
+                  item.module_key as ModuleKey
+              );
+
+        if (mounted) {
+          setAuth({ user: session.user, role, modules });
+        }
+      } catch {
+        if (mounted) setAuth(null);
+      } finally {
+        if (mounted) setChecking(false);
+      }
+    }
+
+    restoreSession();
+
+    const { data: { subscription } } =
+      supabase.auth.onAuthStateChange((event, session) => {
+        if (event === "SIGNED_OUT" || !session) {
+          setAuth(null);
+        }
+      });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    setAuth(null);
+  }
+
+  if (checking) {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        background: "#09080d",
+        color: "#ffffff",
+        display: "grid",
+        placeItems: "center",
+        fontFamily: "Arial, sans-serif"
+      }}>
+        A verificar acesso ao Negroni PSP...
+      </div>
+    );
+  }
+
+  if (!auth) {
+    return (
+      <Login
+        onLogin={(user, role, modules) => {
+          setAuth({ user, role, modules });
+        }}
+      />
+    );
+  }
+
+  return (
+    <Dashboard
+      user={auth.user}
+      role={auth.role}
+      modules={auth.modules}
+      onLogout={handleLogout}
+    />
+  );
+}
+
 
