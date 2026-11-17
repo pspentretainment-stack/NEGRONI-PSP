@@ -405,7 +405,7 @@ function Dashboard({ user, role, modules, onLogout }: DashboardProps) {
     }}
   >
     <iframe
-      src="https://pspentertainment-stack.github.io/PASSALI-ADMIN/"
+     src="https://pspentretainment-stack.github.io/PASSALI-ADMIN/"
       title="Passali Tickets — Administração"
       style={{
         width: "100%",
