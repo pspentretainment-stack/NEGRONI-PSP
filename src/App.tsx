@@ -417,6 +417,8 @@ function Dashboard({ user, role, modules, onLogout }: DashboardProps) {
       allow="clipboard-read; clipboard-write"
     />
   </section>
+) : activeModule === "artists" ? (
+  <Calendar user={user} role={role} />
 ) : (
   <section className="module-placeholder">
               <div className="placeholder-icon">
