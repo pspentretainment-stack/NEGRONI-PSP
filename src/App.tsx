@@ -423,7 +423,7 @@ function Dashboard({ user, role, modules, onLogout }: DashboardProps) {
   <section className="module-placeholder">
               <div className="placeholder-icon">
                 {activeModule === "passali" && <Ticket size={32} />}
-                {activeModule === "artists" && <Mic2 size={32} />}
+              
                 {activeModule === "business" && <BriefcaseBusiness size={32} />}
                 {activeModule === "management" && <ShieldCheck size={32} />}
               </div>
