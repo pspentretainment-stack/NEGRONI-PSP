@@ -58,15 +58,13 @@ function localDateTime(date: Date) {
 }
 
 
-function formatDate(value: string) {
+function formatTime(value: string) {
   return new Intl.DateTimeFormat("pt-PT", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
     timeZone: "Europe/Lisbon"
   }).format(new Date(value));
 }
-
 function startOfMonth(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
