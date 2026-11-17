@@ -57,13 +57,6 @@ function localDateTime(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function formatTime(value: string) {
-  return new Intl.DateTimeFormat("pt-PT", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Europe/Lisbon"
-  }).format(new Date(value));
-}
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("pt-PT", {
