@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import Login from "./Login";
+import Calendar from "./Calendar";
 import { supabase } from "./supabase";
 import {
   LayoutDashboard,
