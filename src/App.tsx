@@ -284,9 +284,10 @@ function Dashboard({ user, role, modules, onLogout }: DashboardProps) {
                   <div className="hero-tag">
                     <Command size={13} />
                     CENTRAL MANAGEMENT
-                  </div>
-                 
-                <div className="hero-art">
+      </div>
+        </div>
+
+        <div className="hero-art">
                   <div className="orbit orbit-one" />
                   <div className="orbit orbit-two" />
                   <div className="orbit orbit-three" />
