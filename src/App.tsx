@@ -85,6 +85,9 @@ function Dashboard({ user, role, modules, onLogout }: DashboardProps) {
 );
 
   const current = moduleContent[activeModule];
+  const hasAccess =
+  activeModule === "dashboard" ||
+  modules.includes(activeModule as ModuleKey);
 
   return (
     <div className="app-shell">
@@ -221,7 +224,60 @@ function Dashboard({ user, role, modules, onLogout }: DashboardProps) {
             </div>
           </section>
 
-          {activeModule === "dashboard" ? (
+         {!hasAccess ? (
+  <section
+    style={{
+      minHeight: "420px",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      textAlign: "center",
+      padding: "40px 20px",
+      background: "#111016",
+      border: "1px solid #33283d",
+      borderRadius: "16px"
+    }}
+  >
+    <div
+      style={{
+        width: "70px",
+        height: "70px",
+        borderRadius: "20px",
+        background: "#351b25",
+        color: "#ff8585",
+        display: "grid",
+        placeItems: "center",
+        marginBottom: "24px"
+      }}
+    >
+      <ShieldCheck size={34} />
+    </div>
+
+    <h2 style={{ color: "#ffffff", marginBottom: "12px" }}>
+      Acesso restrito
+    </h2>
+
+    <p style={{
+      color: "#a49cac",
+      maxWidth: "430px",
+      lineHeight: 1.7
+    }}>
+      Não tens acesso a esta página. A tua conta não tem
+      autorização para utilizar este módulo.
+      Contacta o administrador do Negroni PSP caso
+      precises de acesso.
+    </p>
+
+    <button
+      className="back-button"
+      onClick={() => setActiveModule("dashboard")}
+      style={{ marginTop: "20px" }}
+    >
+      Voltar ao Dashboard
+    </button>
+  </section>
+) : activeModule === "dashboard" ? (
             <>
               <section className="hero-banner">
                 <div className="hero-content">
