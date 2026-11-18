@@ -4,6 +4,7 @@ import type { User } from "@supabase/supabase-js";
 import Login from "./Login";
 import Calendar from "./Calendar";
 import { supabase } from "./supabase";
+import PSPManagement from "./PSPManagement";
 import {
   LayoutDashboard,
   Ticket,
@@ -419,6 +420,8 @@ function Dashboard({ user, role, modules, onLogout }: DashboardProps) {
   </section>
 ) : activeModule === "artists" ? (
   <Calendar user={user} role={role} />
+) : activeModule === "management" ? (
+  <PSPManagement userId={user.id} role={role} />
 ) : (
   <section className="module-placeholder">
               <div className="placeholder-icon">
