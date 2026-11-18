@@ -285,19 +285,7 @@ function Dashboard({ user, role, modules, onLogout }: DashboardProps) {
                     <Command size={13} />
                     CENTRAL MANAGEMENT
                   </div>
-                  <h2>Everything under<br />one <span>command.</span></h2>
-                  <p>
-                    Um único espaço para gerir, acompanhar e desenvolver
-                    todas as operações da PSP Entertainment.
-                  </p>
-                  <button
-                    className="hero-button"
-                    onClick={() => setActiveModule("management")}
-                  >
-                    Explorar gestão PSP
-                    <ArrowUpRight size={16} />
-                  </button>
-                </div>
+                 
                 <div className="hero-art">
                   <div className="orbit orbit-one" />
                   <div className="orbit orbit-two" />
