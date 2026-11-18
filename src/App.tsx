@@ -5,6 +5,7 @@ import Login from "./Login";
 import Calendar from "./Calendar";
 import { supabase } from "./supabase";
 import PSPManagement from "./PSPManagement";
+import AcceptInvite from "./AcceptInvite";
 import {
   LayoutDashboard,
   Ticket,
@@ -450,6 +451,8 @@ function Dashboard({ user, role, modules, onLogout }: DashboardProps) {
 
 
 export default function App() {
+  const isAcceptInvite =
+  new URLSearchParams(window.location.search).get("accept-invite") === "1";
   const [auth, setAuth] = useState<{
     user: User;
     role: Role;
@@ -554,7 +557,9 @@ export default function App() {
     await supabase.auth.signOut();
     setAuth(null);
   }
-
+if (isAcceptInvite) {
+  return <AcceptInvite />;
+}
   if (checking) {
     return (
       <div style={{
