@@ -1,7 +1,14 @@
 
-import { useState } from "react";
-import type { FormEvent } from "react";
-import { LockKeyhole, Mail, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { useEffect, useState } from "react";
+import type { FormEvent, CSSProperties } from "react";
+import {
+  LockKeyhole,
+  Mail,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  KeyRound
+} from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 
@@ -22,16 +29,177 @@ interface LoginProps {
   ) => void;
 }
 
+type PageMode = "login" | "invite";
+
 export default function Login({ onLogin }: LoginProps) {
+  const [mode, setMode] = useState<PageMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [checkingInvite, setCheckingInvite] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    let mounted = true;
+
+    async function checkInvitation() {
+      try {
+        const url = new URL(window.location.href);
+        const hash = new URLSearchParams(
+          url.hash.replace(/^#/, "")
+        );
+
+        const isInvite =
+          url.searchParams.get("accept-invite") === "1" ||
+          hash.get("type") === "invite" ||
+          hash.get("type") === "recovery";
+
+        // Se existir um código PKCE na URL, trocar por sessão.
+        const code = url.searchParams.get("code");
+
+        if (code) {
+          const { error: exchangeError } =
+            await supabase.auth.exchangeCodeForSession(code);
+
+          if (exchangeError) {
+            throw exchangeError;
+          }
+        }
+
+        const { data, error: sessionError } =
+          await supabase.auth.getSession();
+
+        if (sessionError) {
+          throw sessionError;
+        }
+
+        if (!mounted) return;
+
+        if (isInvite && data.session) {
+          setMode("invite");
+          setEmail(data.session.user.email || "");
+        } else if (isInvite && !data.session) {
+          setError(
+            "O convite não foi validado ou já expirou. Solicita um novo convite ao administrador."
+          );
+        }
+      } catch (err) {
+        if (mounted) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Não foi possível validar o convite."
+          );
+        }
+      } finally {
+        if (mounted) {
+          setCheckingInvite(false);
+        }
+      }
+    }
+
+    checkInvitation();
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!mounted) return;
+
+        if (
+          session &&
+          (event === "PASSWORD_RECOVERY" ||
+            event === "SIGNED_IN")
+        ) {
+          const url = new URL(window.location.href);
+          const hash = new URLSearchParams(
+            url.hash.replace(/^#/, "")
+          );
+
+          if (
+            url.searchParams.get("accept-invite") === "1" ||
+            hash.get("type") === "invite" ||
+            event === "PASSWORD_RECOVERY"
+          ) {
+            setMode("invite");
+            setEmail(session.user.email || "");
+          }
+        }
+      }
+    );
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  async function completeLogin(user: User) {
+    const { data: roleData, error: roleError } = await supabase
+      .from("negroni_user_roles")
+      .select("role, is_active")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (roleError) {
+      throw new Error("Não foi possível verificar as permissões.");
+    }
+
+    if (!roleData || !roleData.is_active) {
+      await supabase.auth.signOut();
+      throw new Error("A tua conta não tem acesso ativo ao Negroni.");
+    }
+
+    const validRoles: Role[] = [
+      "super_admin",
+      "admin",
+      "manager",
+      "artist",
+      "collaborator"
+    ];
+
+    if (!validRoles.includes(roleData.role as Role)) {
+      await supabase.auth.signOut();
+      throw new Error("Função de utilizador inválida.");
+    }
+
+    const role = roleData.role as Role;
+
+    const { data: accessData, error: accessError } = await supabase
+      .from("negroni_module_access")
+      .select("module_key")
+      .eq("user_id", user.id)
+      .eq("is_active", true);
+
+    if (accessError) {
+      throw new Error("Não foi possível carregar os acessos.");
+    }
+
+    const allModules: ModuleKey[] = [
+      "passali",
+      "artists",
+      "business",
+      "management"
+    ];
+
+    const modules =
+      role === "super_admin"
+        ? allModules
+        : (accessData || []).map(
+            (item: { module_key: string }) =>
+              item.module_key as ModuleKey
+          );
+
+    onLogin(user, role, modules);
+  }
+
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setSuccess("");
     setLoading(true);
 
     try {
@@ -45,62 +213,7 @@ export default function Login({ onLogin }: LoginProps) {
         throw new Error("Email ou palavra-passe incorretos.");
       }
 
-      const { data: roleData, error: roleError } = await supabase
-        .from("negroni_user_roles")
-        .select("role, is_active")
-        .eq("user_id", data.user.id)
-        .maybeSingle();
-
-      if (roleError) {
-        throw new Error("Não foi possível verificar as permissões.");
-      }
-
-      if (!roleData || !roleData.is_active) {
-        await supabase.auth.signOut();
-        throw new Error("A tua conta não tem acesso ativo ao Negroni.");
-      }
-
-      const validRoles: Role[] = [
-        "super_admin",
-        "admin",
-        "manager",
-        "artist",
-        "collaborator"
-      ];
-
-      if (!validRoles.includes(roleData.role as Role)) {
-        await supabase.auth.signOut();
-        throw new Error("Função de utilizador inválida.");
-      }
-
-      const role = roleData.role as Role;
-
-      const { data: accessData, error: accessError } = await supabase
-        .from("negroni_module_access")
-        .select("module_key")
-        .eq("user_id", data.user.id)
-        .eq("is_active", true);
-
-      if (accessError) {
-        throw new Error("Não foi possível carregar os acessos.");
-      }
-
-      const allModules: ModuleKey[] = [
-        "passali",
-        "artists",
-        "business",
-        "management"
-      ];
-
-      const modules =
-        role === "super_admin"
-          ? allModules
-          : (accessData || []).map(
-            (item: { module_key: string }) => item.module_key as ModuleKey
-            );
-
-      onLogin(data.user, role, modules);
-
+      await completeLogin(data.user);
     } catch (err) {
       setError(
         err instanceof Error
@@ -112,6 +225,82 @@ export default function Login({ onLogin }: LoginProps) {
     }
   }
 
+  async function handleSetPassword(
+    event: FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (password.length < 8) {
+      setError("A palavra-passe deve ter pelo menos 8 caracteres.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("As palavras-passe não coincidem.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { data: sessionData } =
+        await supabase.auth.getSession();
+
+      if (!sessionData.session) {
+        throw new Error(
+          "A sessão do convite expirou. Solicita um novo convite."
+        );
+      }
+
+      const { data, error: updateError } =
+        await supabase.auth.updateUser({
+          password
+        });
+
+      if (updateError || !data.user) {
+        throw new Error(
+          updateError?.message ||
+          "Não foi possível definir a palavra-passe."
+        );
+      }
+
+      setSuccess("Palavra-passe criada com sucesso. A entrar no Negroni...");
+
+      // Limpar os parâmetros do convite do endereço.
+      window.history.replaceState(
+        {},
+        document.title,
+        window.location.pathname
+      );
+
+      await completeLogin(data.user);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Ocorreu um erro ao criar a palavra-passe."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (checkingInvite) {
+    return (
+      <main style={styles.page}>
+        <section style={styles.card}>
+          <div style={styles.logo}>N<span>.</span></div>
+          <div style={styles.brand}>NEGRONI</div>
+          <p style={styles.description}>
+            A verificar o teu convite...
+          </p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main style={styles.page}>
       <section style={styles.card}>
@@ -121,68 +310,155 @@ export default function Login({ onLogin }: LoginProps) {
         <div style={styles.subtitle}>PSP ENTERTAINMENT</div>
 
         <div style={styles.icon}>
-          <ShieldCheck size={25} />
+          {mode === "invite"
+            ? <KeyRound size={25} />
+            : <ShieldCheck size={25} />}
         </div>
 
-        <h1 style={styles.heading}>Bem-vindo de volta</h1>
+        <h1 style={styles.heading}>
+          {mode === "invite"
+            ? "Criar palavra-passe"
+            : "Bem-vindo de volta"}
+        </h1>
+
         <p style={styles.description}>
-          Inicia sessão para aceder à central de gestão.
+          {mode === "invite"
+            ? "Define a tua palavra-passe para ativar o acesso ao Negroni."
+            : "Inicia sessão para aceder à central de gestão."}
         </p>
 
-        <form onSubmit={handleSubmit} style={styles.form}>
-          <label style={styles.label}>Email profissional</label>
-          <div style={styles.inputWrapper}>
-            <Mail size={18} style={styles.inputIcon} />
-            <input
-              type="email"
-              placeholder="nome@pspentertainment.com"
-              value={email}
-              onChange={event => setEmail(event.target.value)}
-              required
-              autoComplete="username"
-              style={styles.input}
-            />
-          </div>
+        {mode === "invite" ? (
+          <form onSubmit={handleSetPassword} style={styles.form}>
+            <label style={styles.label}>Email do convite</label>
 
-          <label style={styles.label}>Palavra-passe</label>
-          <div style={styles.inputWrapper}>
-            <LockKeyhole size={18} style={styles.inputIcon} />
-            <input
-              type={showPassword ? "text" : "password"}
-              placeholder="Introduz a tua palavra-passe"
-              value={password}
-              onChange={event => setPassword(event.target.value)}
-              required
-              autoComplete="current-password"
-              style={styles.input}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              style={styles.eyeButton}
-              aria-label="Mostrar ou ocultar palavra-passe"
-            >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          </div>
-
-          {error && (
-            <div style={styles.error}>
-              {error}
+            <div style={styles.inputWrapper}>
+              <Mail size={18} style={styles.inputIcon} />
+              <input
+                type="email"
+                value={email}
+                readOnly
+                style={styles.input}
+              />
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              ...styles.submit,
-              opacity: loading ? 0.7 : 1
-            }}
-          >
-            {loading ? "A verificar acesso..." : "Iniciar sessão"}
-          </button>
-        </form>
+            <label style={styles.label}>Nova palavra-passe</label>
+
+            <div style={styles.inputWrapper}>
+              <LockKeyhole size={18} style={styles.inputIcon} />
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Mínimo de 8 caracteres"
+                value={password}
+                onChange={event => setPassword(event.target.value)}
+                required
+                minLength={8}
+                autoComplete="new-password"
+                style={styles.input}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={styles.eyeButton}
+                aria-label="Mostrar ou ocultar palavra-passe"
+              >
+                {showPassword
+                  ? <EyeOff size={18} />
+                  : <Eye size={18} />}
+              </button>
+            </div>
+
+            <label style={styles.label}>
+              Confirmar palavra-passe
+            </label>
+
+            <div style={styles.inputWrapper}>
+              <LockKeyhole size={18} style={styles.inputIcon} />
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Repete a palavra-passe"
+                value={confirmPassword}
+                onChange={event =>
+                  setConfirmPassword(event.target.value)
+                }
+                required
+                minLength={8}
+                autoComplete="new-password"
+                style={styles.input}
+              />
+            </div>
+
+            {error && <div style={styles.error}>{error}</div>}
+            {success && <div style={styles.success}>{success}</div>}
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                ...styles.submit,
+                opacity: loading ? 0.7 : 1
+              }}
+            >
+              {loading
+                ? "A criar conta..."
+                : "Criar palavra-passe e entrar"}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleLogin} style={styles.form}>
+            <label style={styles.label}>Email profissional</label>
+
+            <div style={styles.inputWrapper}>
+              <Mail size={18} style={styles.inputIcon} />
+              <input
+                type="email"
+                placeholder="nome@pspentertainment.com"
+                value={email}
+                onChange={event => setEmail(event.target.value)}
+                required
+                autoComplete="username"
+                style={styles.input}
+              />
+            </div>
+
+            <label style={styles.label}>Palavra-passe</label>
+
+            <div style={styles.inputWrapper}>
+              <LockKeyhole size={18} style={styles.inputIcon} />
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Introduz a tua palavra-passe"
+                value={password}
+                onChange={event => setPassword(event.target.value)}
+                required
+                autoComplete="current-password"
+                style={styles.input}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={styles.eyeButton}
+                aria-label="Mostrar ou ocultar palavra-passe"
+              >
+                {showPassword
+                  ? <EyeOff size={18} />
+                  : <Eye size={18} />}
+              </button>
+            </div>
+
+            {error && <div style={styles.error}>{error}</div>}
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                ...styles.submit,
+                opacity: loading ? 0.7 : 1
+              }}
+            >
+              {loading ? "A verificar acesso..." : "Iniciar sessão"}
+            </button>
+          </form>
+        )}
 
         <div style={styles.security}>
           <LockKeyhole size={13} />
@@ -197,7 +473,7 @@ export default function Login({ onLogin }: LoginProps) {
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
     background: "#09080d",
@@ -270,7 +546,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: "8px"
   },
   inputWrapper: {
-    height: "49px",
+    minHeight: "49px",
     display: "flex",
     alignItems: "center",
     border: "1px solid #37313f",
@@ -309,8 +585,17 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "12px",
     lineHeight: 1.5
   },
+  success: {
+    color: "#7de5b0",
+    background: "#102c20",
+    border: "1px solid #245d40",
+    borderRadius: "8px",
+    padding: "11px",
+    fontSize: "12px",
+    lineHeight: 1.5
+  },
   submit: {
-    height: "49px",
+    minHeight: "49px",
     border: "none",
     borderRadius: "9px",
     background: "linear-gradient(100deg, #7542b8, #9b61d7)",
@@ -337,3 +622,4 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: "center"
   }
 };
+
