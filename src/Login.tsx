@@ -239,16 +239,17 @@ export default function Login({ onLogin }: LoginProps) {
     setLoading(true);
 
     try {
-      const { data, error: authError } =
-        await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password
-        });
+    if (authError) {
+  throw new Error(
+    `Erro de autenticação: ${authError.message}`
+  );
+}
 
-      if (authError || !data.user) {
-        throw new Error(
-          "Email ou palavra-passe incorretos."
-        );
+if (!data.user) {
+  throw new Error(
+    "O Supabase não devolveu os dados do utilizador."
+  );
+}
       }
 
       await completeLogin(data.user);
