@@ -40,7 +40,6 @@ export default function Login({ onLogin }: LoginProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [artistName, setArtistName] = useState("");
   const [isArtistInvite, setIsArtistInvite] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -48,7 +47,7 @@ export default function Login({ onLogin }: LoginProps) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Verificar se o convite pertence a um artista
+  // Identificar se a conta convidada é de um artista
   async function checkArtistInvite(userId: string) {
     const { data, error } = await supabase
       .from("negroni_user_roles")
@@ -57,9 +56,7 @@ export default function Login({ onLogin }: LoginProps) {
       .eq("is_active", true)
       .maybeSingle();
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
     setIsArtistInvite(data?.role === "artist");
   }
@@ -86,24 +83,18 @@ export default function Login({ onLogin }: LoginProps) {
           const { error: exchangeError } =
             await supabase.auth.exchangeCodeForSession(code);
 
-          if (exchangeError) {
-            throw exchangeError;
-          }
+          if (exchangeError) throw exchangeError;
         }
 
         const { data, error: sessionError } =
           await supabase.auth.getSession();
 
-        if (sessionError) {
-          throw sessionError;
-        }
-
+        if (sessionError) throw sessionError;
         if (!mounted) return;
 
         if (isInvite && data.session) {
           setMode("invite");
           setEmail(data.session.user.email || "");
-
           await checkArtistInvite(data.session.user.id);
         } else if (isInvite && !data.session) {
           setError(
@@ -119,9 +110,7 @@ export default function Login({ onLogin }: LoginProps) {
           );
         }
       } finally {
-        if (mounted) {
-          setCheckingInvite(false);
-        }
+        if (mounted) setCheckingInvite(false);
       }
     }
 
@@ -129,47 +118,42 @@ export default function Login({ onLogin }: LoginProps) {
 
     const {
       data: { subscription }
-    } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (!mounted) return;
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+
+      if (
+        session &&
+        (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN")
+      ) {
+        const url = new URL(window.location.href);
+        const hash = new URLSearchParams(
+          url.hash.replace(/^#/, "")
+        );
 
         if (
-          session &&
-          (event === "PASSWORD_RECOVERY" ||
-            event === "SIGNED_IN")
+          url.searchParams.get("accept-invite") === "1" ||
+          hash.get("type") === "invite" ||
+          event === "PASSWORD_RECOVERY"
         ) {
-          const url = new URL(window.location.href);
-          const hash = new URLSearchParams(
-            url.hash.replace(/^#/, "")
-          );
+          setMode("invite");
+          setEmail(session.user.email || "");
 
-          if (
-            url.searchParams.get("accept-invite") === "1" ||
-            hash.get("type") === "invite" ||
-            event === "PASSWORD_RECOVERY"
-          ) {
-            setMode("invite");
-            setEmail(session.user.email || "");
-
-            // Consultar a função do utilizador fora do callback
-            // de autenticação do Supabase.
-            window.setTimeout(() => {
-              if (mounted) {
-                checkArtistInvite(session.user.id).catch(err => {
-                  if (mounted) {
-                    setError(
-                      err instanceof Error
-                        ? err.message
-                        : "Não foi possível verificar o perfil artístico."
-                    );
-                  }
-                });
-              }
-            }, 0);
-          }
+          window.setTimeout(() => {
+            if (mounted) {
+              checkArtistInvite(session.user.id).catch(err => {
+                if (mounted) {
+                  setError(
+                    err instanceof Error
+                      ? err.message
+                      : "Não foi possível verificar o perfil artístico."
+                  );
+                }
+              });
+            }
+          }, 0);
         }
       }
-    );
+    });
 
     return () => {
       mounted = false;
@@ -299,16 +283,6 @@ export default function Login({ onLogin }: LoginProps) {
       return;
     }
 
-    if (
-      isArtistInvite &&
-      artistName.trim().length < 2
-    ) {
-      setError(
-        "Introduz um nome artístico com pelo menos 2 caracteres."
-      );
-      return;
-    }
-
     setLoading(true);
 
     try {
@@ -321,20 +295,16 @@ export default function Login({ onLogin }: LoginProps) {
         );
       }
 
-      // Criar ou recuperar o perfil artístico.
-      // A função SQL evita duplicar associações.
+      // Criar ou recuperar o perfil do artista usando o email.
       if (isArtistInvite) {
         const { error: profileError } =
           await supabase.rpc(
-            "negroni_register_artist_profile",
-            {
-              p_artist_name: artistName.trim()
-            }
+            "negroni_register_artist_profile"
           );
 
         if (profileError) {
           throw new Error(
-            "Não foi possível criar o perfil artístico: " +
+            "Não foi possível associar o perfil artístico: " +
             profileError.message
           );
         }
@@ -357,7 +327,6 @@ export default function Login({ onLogin }: LoginProps) {
         "Palavra-passe criada com sucesso. A entrar no Negroni..."
       );
 
-      // Limpar os parâmetros do convite
       window.history.replaceState(
         {},
         document.title,
@@ -443,30 +412,6 @@ export default function Login({ onLogin }: LoginProps) {
                 style={styles.input}
               />
             </div>
-
-            {isArtistInvite && (
-              <>
-                <label style={styles.label}>
-                  Nome artístico
-                </label>
-
-                <div style={styles.inputWrapper}>
-                  <input
-                    type="text"
-                    placeholder="Introduz o teu nome artístico"
-                    value={artistName}
-                    onChange={event =>
-                      setArtistName(event.target.value)
-                    }
-                    required
-                    minLength={2}
-                    maxLength={60}
-                    autoComplete="nickname"
-                    style={styles.input}
-                  />
-                </div>
-              </>
-            )}
 
             <label style={styles.label}>
               Nova palavra-passe
@@ -658,7 +603,6 @@ const styles: Record<string, CSSProperties> = {
     padding: "30px 20px",
     fontFamily: "Inter, Arial, sans-serif"
   },
-
   card: {
     width: "100%",
     maxWidth: "420px",
@@ -670,27 +614,23 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
     boxShadow: "0 25px 80px rgba(0,0,0,0.35)"
   },
-
   logo: {
     fontSize: "38px",
     fontWeight: 800,
     color: "#ffffff"
   },
-
   brand: {
     fontSize: "15px",
     fontWeight: 800,
     letterSpacing: "4px",
     marginTop: "5px"
   },
-
   subtitle: {
     color: "#8f899b",
     fontSize: "9px",
     letterSpacing: "3px",
     marginTop: "5px"
   },
-
   icon: {
     width: "52px",
     height: "52px",
@@ -701,33 +641,28 @@ const styles: Record<string, CSSProperties> = {
     placeItems: "center",
     margin: "35px auto 20px"
   },
-
   heading: {
     fontSize: "24px",
     margin: "0 0 9px",
     fontWeight: 700
   },
-
   description: {
     color: "#9993a3",
     fontSize: "13px",
     marginBottom: "30px"
   },
-
   form: {
     display: "flex",
     flexDirection: "column",
     textAlign: "left",
     gap: "10px"
   },
-
   label: {
     color: "#d6d1df",
     fontSize: "12px",
     fontWeight: 600,
     marginTop: "8px"
   },
-
   inputWrapper: {
     minHeight: "49px",
     display: "flex",
@@ -738,12 +673,10 @@ const styles: Record<string, CSSProperties> = {
     padding: "0 13px",
     gap: "10px"
   },
-
   inputIcon: {
     color: "#8c829b",
     flexShrink: 0
   },
-
   input: {
     flex: 1,
     minWidth: 0,
@@ -753,7 +686,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     fontSize: "13px"
   },
-
   eyeButton: {
     border: "none",
     background: "transparent",
@@ -762,7 +694,6 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     padding: "4px"
   },
-
   error: {
     color: "#ff8585",
     background: "#35191e",
@@ -772,7 +703,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "12px",
     lineHeight: 1.5
   },
-
   success: {
     color: "#7de5b0",
     background: "#102c20",
@@ -782,7 +712,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "12px",
     lineHeight: 1.5
   },
-
   submit: {
     minHeight: "49px",
     border: "none",
@@ -794,7 +723,6 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     marginTop: "13px"
   },
-
   security: {
     display: "flex",
     justifyContent: "center",
@@ -804,7 +732,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "11px",
     marginTop: "27px"
   },
-
   footer: {
     color: "#625c6c",
     fontSize: "9px",
