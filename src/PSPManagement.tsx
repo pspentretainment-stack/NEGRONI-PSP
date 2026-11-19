@@ -13,7 +13,11 @@ import {
   X,
   LayoutGrid,
   Activity,
-  AlertTriangle
+  AlertTriangle,
+  Mail,
+  Send,
+  Eye,
+  CheckSquare
 } from "lucide-react";
 
 type Role =
@@ -158,6 +162,12 @@ export default function PSPManagement({ userId, role }: Props) {
 
   const [editing, setEditing] = useState<ManagedUser | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [emailAudience, setEmailAudience] = useState("all");
+  const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailMessage, setEmailMessage] = useState("");
+  const [emailPreview, setEmailPreview] = useState(false);
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<Role>("artist");
@@ -304,6 +314,81 @@ export default function PSPManagement({ userId, role }: Props) {
     );
   }
 
+  const audienceUsers = users.filter((u) => {
+    if (!u.email || !u.is_active) return false;
+    if (emailAudience === "all") return true;
+    if (emailAudience === "artists") return u.role === "artist";
+    if (emailAudience === "collaborators") return u.role === "collaborator";
+    if (emailAudience === "management") return ["super_admin", "admin", "manager"].includes(u.role || "");
+    return true;
+  });
+
+  const selectedEmailUsers = users.filter((u) =>
+    selectedRecipients.includes(u.id) && u.email && u.is_active
+  );
+
+  function toggleRecipient(userId: string) {
+    setSelectedRecipients((old) =>
+      old.includes(userId) ? old.filter((id) => id !== userId) : [...old, userId]
+    );
+  }
+
+  function selectAudience() {
+    setSelectedRecipients(audienceUsers.map((u) => u.id));
+  }
+
+  async function sendEmail() {
+    const recipients = selectedEmailUsers.map((u) => u.email);
+
+    if (!recipients.length) {
+      setNotice({
+        type: "error",
+        text: "Seleciona pelo menos um destinatário."
+      });
+      return;
+    }
+
+    if (!emailSubject.trim() || !emailMessage.trim()) {
+      setNotice({
+        type: "error",
+        text: "Preenche o assunto e a mensagem."
+      });
+      return;
+    }
+
+    setBusy(true);
+    setNotice(null);
+
+    try {
+      await callAdmin({
+        action: "send_email",
+        recipients,
+        subject: emailSubject.trim(),
+        message: emailMessage.trim()
+      });
+
+      setEmailOpen(false);
+      setEmailPreview(false);
+      setEmailSubject("");
+      setEmailMessage("");
+      setSelectedRecipients([]);
+
+      setNotice({
+        type: "ok",
+        text: `Pedido de envio submetido para ${recipients.length} destinatário(s).`
+      });
+    } catch (error) {
+      setNotice({
+        type: "error",
+        text: error instanceof Error
+          ? error.message
+          : "Erro ao enviar emails."
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div style={styles.page}>
       <div style={styles.header}>
@@ -329,6 +414,18 @@ export default function PSPManagement({ userId, role }: Props) {
           >
             <RefreshCw size={15} />
             Atualizar
+          </button>
+
+          <button
+            style={styles.secondary}
+            onClick={() => {
+              setEmailOpen(true);
+              setEmailAudience("all");
+              setSelectedRecipients([]);
+            }}
+          >
+            <Mail size={16} />
+            Centro de comunicação
           </button>
 
           <button
@@ -657,6 +754,240 @@ export default function PSPManagement({ userId, role }: Props) {
         </div>
       )}
 
+      {emailOpen && (
+        <div style={styles.overlay}>
+          <div style={{ ...styles.modal, maxWidth: 760 }}>
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12
+            }}>
+              <div>
+                <div style={styles.eyebrow}>
+                  PSP ENTERTAINMENT · COMUNICAÇÃO
+                </div>
+                <h3 style={{ margin: 0 }}>Enviar email</h3>
+                <p style={styles.muted}>
+                  Seleciona os destinatários e prepara a comunicação.
+                </p>
+              </div>
+
+              <button
+                style={styles.secondary}
+                onClick={() => {
+                  setEmailOpen(false);
+                  setEmailPreview(false);
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {!emailPreview ? (
+              <>
+                <label style={styles.label}>
+                  Grupo de destinatários
+                </label>
+
+                <select
+                  style={styles.input}
+                  value={emailAudience}
+                  onChange={(e) => {
+                    setEmailAudience(e.target.value);
+                    setSelectedRecipients([]);
+                  }}
+                >
+                  <option value="all">Todos os utilizadores ativos</option>
+                  <option value="artists">Artistas</option>
+                  <option value="collaborators">Colaboradores</option>
+                  <option value="management">Administração e gestão</option>
+                </select>
+
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 10,
+                  marginTop: 12
+                }}>
+                  <label style={{ ...styles.label, margin: 0 }}>
+                    Destinatários individuais ({selectedRecipients.length} selecionados)
+                  </label>
+
+                  <button
+                    type="button"
+                    style={styles.secondary}
+                    onClick={selectAudience}
+                  >
+                    <CheckSquare size={14} />
+                    Selecionar grupo
+                  </button>
+                </div>
+
+                <div style={{
+                  maxHeight: 180,
+                  overflowY: "auto",
+                  border: "1px solid #393044",
+                  borderRadius: 8,
+                  marginTop: 8,
+                  padding: 8
+                }}>
+                  {audienceUsers.length === 0 ? (
+                    <p style={styles.muted}>
+                      Não existem utilizadores ativos neste grupo.
+                    </p>
+                  ) : audienceUsers.map((u) => (
+                    <label
+                      key={u.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 9,
+                        padding: "8px 5px",
+                        borderBottom: "1px solid #282230",
+                        fontSize: 12,
+                        cursor: "pointer"
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedRecipients.includes(u.id)}
+                        onChange={() => toggleRecipient(u.id)}
+                      />
+                      <span style={{ flex: 1 }}>{u.email}</span>
+                      <span style={{
+                        color: "#958ba2",
+                        fontSize: 10
+                      }}>
+                        {ROLES.find((r) => r.value === u.role)?.label || "Sem função"}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+
+                <label style={styles.label}>Assunto</label>
+
+                <input
+                  style={styles.input}
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  placeholder="Assunto do email"
+                  maxLength={180}
+                />
+
+                <label style={styles.label}>Mensagem</label>
+
+                <textarea
+                  style={{
+                    ...styles.input,
+                    minHeight: 160,
+                    resize: "vertical",
+                    fontFamily: "inherit"
+                  }}
+                  value={emailMessage}
+                  onChange={(e) => setEmailMessage(e.target.value)}
+                  placeholder="Escreve aqui a tua mensagem..."
+                />
+
+                <p style={styles.muted}>
+                  Remetente: Negroni | PSP Entertainment
+                </p>
+
+                <div style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: 9,
+                  marginTop: 18
+                }}>
+                  <button
+                    style={styles.secondary}
+                    onClick={() => setEmailOpen(false)}
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    style={styles.button}
+                    disabled={
+                      !selectedRecipients.length ||
+                      !emailSubject.trim() ||
+                      !emailMessage.trim()
+                    }
+                    onClick={() => setEmailPreview(true)}
+                  >
+                    <Eye size={15} />
+                    Pré-visualizar
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ ...styles.panel, marginTop: 18 }}>
+                  <p style={styles.muted}>
+                    DESTINATÁRIOS ({selectedEmailUsers.length})
+                  </p>
+
+                  <p style={{
+                    fontSize: 12,
+                    overflowWrap: "anywhere"
+                  }}>
+                    {selectedEmailUsers.map((u) => u.email).join(", ")}
+                  </p>
+
+                  <div style={{
+                    borderTop: "1px solid #30283b",
+                    paddingTop: 12,
+                    marginTop: 12
+                  }}>
+                    <p style={styles.muted}>ASSUNTO</p>
+                    <strong>{emailSubject}</strong>
+
+                    <p style={{
+                      ...styles.muted,
+                      marginTop: 18
+                    }}>
+                      MENSAGEM
+                    </p>
+
+                    <p style={{
+                      whiteSpace: "pre-wrap",
+                      fontSize: 13,
+                      lineHeight: 1.6
+                    }}>
+                      {emailMessage}
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: 9,
+                  marginTop: 18
+                }}>
+                  <button
+                    style={styles.secondary}
+                    onClick={() => setEmailPreview(false)}
+                  >
+                    Voltar e editar
+                  </button>
+
+                  <button
+                    style={styles.button}
+                    disabled={busy}
+                    onClick={() => void sendEmail()}
+                  >
+                    <Send size={15} />
+                    {busy ? "A enviar..." : "Confirmar envio"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {inviteOpen && (
         <div style={styles.overlay}>
           <div style={styles.modal}>
@@ -678,7 +1009,9 @@ export default function PSPManagement({ userId, role }: Props) {
             </div>
 
             <form onSubmit={(e) => void inviteUser(e)}>
-              <label style={styles.label}>Endereço de email</label>
+              <label style={styles.label}>
+                Endereço de email
+              </label>
 
               <input
                 style={styles.input}
