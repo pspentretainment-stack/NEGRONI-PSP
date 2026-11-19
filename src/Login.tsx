@@ -36,12 +36,27 @@ export default function Login({ onLogin }: LoginProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [artistName, setArtistName] = useState("");
+const [isArtistInvite, setIsArtistInvite] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checkingInvite, setCheckingInvite] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+async function checkArtistInvite(userId: string) {
+  const { data, error } = await supabase
+    .from("negroni_user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .maybeSingle();
 
+  if (error) {
+    throw error;
+  }
+
+  setIsArtistInvite(data?.role === "artist");
+}
   useEffect(() => {
     let mounted = true;
 
@@ -78,9 +93,12 @@ export default function Login({ onLogin }: LoginProps) {
 
         if (!mounted) return;
 
-        if (isInvite && data.session) {
-          setMode("invite");
-          setEmail(data.session.user.email || "");
+      if (isInvite && data.session) {
+  setMode("invite");
+  setEmail(data.session.user.email || "");
+        await checkArtistInvite(session.user.id);
+  await checkArtistInvite(data.session.user.id);
+}
         } else if (isInvite && !data.session) {
           setError(
             "O convite não foi validado ou já expirou. Solicita um novo convite ao administrador."
@@ -253,7 +271,10 @@ export default function Login({ onLogin }: LoginProps) {
           "A sessão do convite expirou. Solicita um novo convite."
         );
       }
-
+const { data, error: updateError } =
+  await supabase.auth.updateUser({
+    password
+  });
       const { data, error: updateError } =
         await supabase.auth.updateUser({
           password
@@ -340,7 +361,27 @@ export default function Login({ onLogin }: LoginProps) {
                 style={styles.input}
               />
             </div>
+{isArtistInvite && (
+  <>
+    <label style={styles.label}>
+      Nome artístico
+    </label>
 
+    <div style={styles.inputWrapper}>
+      <input
+        type="text"
+        placeholder="Introduz o teu nome artístico"
+        value={artistName}
+        onChange={event => setArtistName(event.target.value)}
+        required
+        minLength={2}
+        maxLength={60}
+        autoComplete="nickname"
+        style={styles.input}
+      />
+    </div>
+  </>
+)}
             <label style={styles.label}>Nova palavra-passe</label>
 
             <div style={styles.inputWrapper}>
