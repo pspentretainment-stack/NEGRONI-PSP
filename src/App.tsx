@@ -6,6 +6,7 @@ import Calendar from "./Calendar";
 import { supabase } from "./supabase";
 import PSPManagement from "./PSPManagement";
 import AcceptInvite from "./AcceptInvite";
+import PSPBusiness from "./PSPBusiness";
 import {
   LayoutDashboard,
   Ticket,
@@ -468,6 +469,8 @@ function Dashboard({ user, role, modules, onLogout }: DashboardProps) {
   <Calendar user={user} role={role} />
 ) : activeModule === "management" ? (
   <PSPManagement userId={user.id} role={role} />
+) : activeModule === "business" ? (
+  <PSPBusiness userId={user.id} role={role} />
 ) : (
   <section className="module-placeholder">
              <div className="placeholder-icon">
