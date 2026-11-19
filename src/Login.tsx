@@ -229,6 +229,7 @@ export default function Login({ onLogin }: LoginProps) {
     onLogin(user, role, modules);
   }
 
+ 
   // Iniciar sessão normal
   async function handleLogin(
     event: FormEvent<HTMLFormElement>
@@ -239,26 +240,33 @@ export default function Login({ onLogin }: LoginProps) {
     setLoading(true);
 
     try {
-    if (authError) {
-  throw new Error(
-    `Erro de autenticação: ${authError.message}`
-  );
-}
+      const { data, error: authError } =
+        await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password
+        });
 
-if (!data.user) {
-  throw new Error(
-    "O Supabase não devolveu os dados do utilizador."
-  );
-}
+      if (authError) {
+        throw new Error(
+          `Erro de autenticação: ${authError.message}`
+        );
+      }
+
+      if (!data.user) {
+        throw new Error(
+          "O Supabase não devolveu os dados do utilizador."
+        );
       }
 
       await completeLogin(data.user);
+
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
           : "Ocorreu um erro ao iniciar sessão."
       );
+
     } finally {
       setLoading(false);
     }
