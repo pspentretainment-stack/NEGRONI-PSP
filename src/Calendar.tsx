@@ -8,7 +8,6 @@ import {
   X, Users, RefreshCw, Search, Pencil, Trash2, Euro,
   CheckCircle2, Circle, Paperclip, Download, FileText,
   ClipboardList, StickyNote, UserRound, Upload, Printer,
-  GripVertical
 } from "lucide-react";
 
 type Role = "super_admin" | "admin" | "manager" | "artist" | "collaborator";
