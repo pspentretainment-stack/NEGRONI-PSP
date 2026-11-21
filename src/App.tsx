@@ -473,9 +473,8 @@ function Dashboard({ user, role, modules, onLogout }: DashboardProps) {
   <PSPBusiness userId={user.id} role={role} />
 ) : (
   <section className="module-placeholder">
-             <div className="placeholder-icon">
-  {activeModule === "passali" && <Ticket size={32} />}
-  {activeModule === "business" && <BriefcaseBusiness size={32} />}
+            <div className="placeholder-icon">
+  <Activity size={32} />
 </div>
               <div className="eyebrow">NEGRONI PSP · MODULE {navigation.findIndex(item => item.id === activeModule)}</div>
               <h2>{current.title}</h2>
